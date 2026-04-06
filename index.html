@@ -73,7 +73,7 @@ const device = await navigator.bluetooth.requestDevice({
   acceptAllDevices: true,
   optionalServices: ['e95d0753-251d-470a-a062-fa1922dfa9a8']
 });
-    });
+  
 
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService('e95d0753-251d-470a-a062-fa1922dfa9a8'); 
