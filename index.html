@@ -62,7 +62,7 @@
 let device, characteristic;
 
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const UART_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
 async function connect() {
   try {
@@ -73,7 +73,7 @@ async function connect() {
 
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService(UART_SERVICE);
-    characteristic = await service.getCharacteristic(UART_TX);
+    characteristic = await service.getCharacteristic(UART_RX);
 
     alert("Connected!");
   } catch (err) {
