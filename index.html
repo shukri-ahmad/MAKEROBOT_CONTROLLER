@@ -59,7 +59,8 @@ let device, characteristic;
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const UART_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
-let activeIntervals = {}; // track holding buttons
+let activeIntervals = {};
+let activeKeys = {};
 
 async function connect() {
   try {
@@ -93,18 +94,16 @@ function send(command) {
   characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
 }
 
-// START HOLD
 function startPress(command, id) {
-  if (activeIntervals[id]) return; // already running
+  if (activeIntervals[id]) return;
 
   highlight(id, true);
 
   activeIntervals[id] = setInterval(() => {
     send(command);
-  }, 100); // send every 100ms (adjust speed here)
+  }, 100);
 }
 
-// STOP HOLD
 function stopPress(id) {
   highlight(id, false);
 
@@ -128,27 +127,21 @@ window.onload = () => {
     const el = document.getElementById(id);
     if (!el) return;
 
-    // Mouse
     el.addEventListener('mousedown', () => startPress(map[id], id));
     el.addEventListener('mouseup', () => stopPress(id));
     el.addEventListener('mouseleave', () => stopPress(id));
 
-    // Touch
     el.addEventListener('touchstart', (e) => {
       e.preventDefault();
       startPress(map[id], id);
     });
     el.addEventListener('touchend', () => stopPress(id));
-    el.addEventListener('touchcancel', () => stopPress(id));
+    el.addEventListener('touchcancel', () => stopPress(id);
   });
 };
 
-// Keyboard HOLD support
-let activeKeys = {};
-
 window.addEventListener('keydown', (e) => {
-  if (activeKeys[e.key]) return; // prevent repeat
-
+  if (activeKeys[e.key]) return;
   activeKeys[e.key] = true;
 
   switch(e.key) {
@@ -175,61 +168,6 @@ window.addEventListener('keyup', (e) => {
 });
 </script>
 
-  
-document.getElementById('connect').onclick = connect;
-
-function highlight(id) {
-  const btn = document.getElementById(id);
-  if (!btn) return;
-  btn.classList.add('active');
-  setTimeout(() => btn.classList.remove('active'), 150);
-}
-
-function send(command) {
-  console.log("SEND:", command);
-  if (!characteristic) return;
-  const encoder = new TextEncoder();
-  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
-}
-
-function press(command, id) {
-  highlight(id);
-  send(command);
-}
-
-window.onload = () => {
-  const map = {
-    'btn-up': 'UP',
-    'btn-down': 'DOWN',
-    'btn-left': 'LEFT',
-    'btn-right': 'RIGHT',
-    'btn-a': 'A',
-    'btn-b': 'B'
-  };
-
-  Object.keys(map).forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('mousedown', () => press(map[id], id));
-    el.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      press(map[id], id);
-    });
-  });
-};
-
-window.addEventListener('keydown', (e) => {
-  switch(e.key) {
-    case 'ArrowUp': press('UP','btn-up'); break;
-    case 'ArrowDown': press('DOWN','btn-down'); break;
-    case 'ArrowLeft': press('LEFT','btn-left'); break;
-    case 'ArrowRight': press('RIGHT','btn-right'); break;
-    case 'a': case 'A': press('A','btn-a'); break;
-    case 'b': case 'B': press('B','btn-b'); break;
-  }
-});
-</script>
-
 <!-- MICRO:BIT MakeCode JavaScript Code
 bluetooth.startUartService();
 bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
@@ -243,3 +181,6 @@ bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () 
   else if(msg == 'B') basic.showString('B');
 });
 -->
+
+</body>
+</html>
