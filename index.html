@@ -65,46 +65,78 @@ const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const UART_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
 async function connect() {
-  device = await navigator.bluetooth.requestDevice({
-    filters: [{ namePrefix: "BBC micro:bit" }],
-    optionalServices: [UART_SERVICE]
-  });
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "BBC micro:bit" }],
+      optionalServices: [UART_SERVICE]
+    });
 
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(UART_SERVICE);
-  characteristic = await service.getCharacteristic(UART_TX);
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(UART_SERVICE);
+    characteristic = await service.getCharacteristic(UART_TX);
 
-  alert("Connected!");
+    alert("Connected!");
+  } catch (err) {
+    console.error(err);
+    alert("Connection failed");
+  }
 }
 
 document.getElementById('connect').onclick = connect;
 
-function press(command, id) {
+function highlight(id) {
   const btn = document.getElementById(id);
-  if (btn) {
-    btn.classList.add('active');
-    setTimeout(() => btn.classList.remove('active'), 150);
-  }
-  send(command);
+  if (!btn) return;
+  btn.classList.add('active');
+  setTimeout(() => btn.classList.remove('active'), 150);
 }
 
 function send(command) {
-  if (!characteristic) {
-    alert("Not connected");
-    return;
-  }
+  console.log("SEND:", command);
+  if (!characteristic) return;
   const encoder = new TextEncoder();
-  characteristic.writeValue(encoder.encode(command + "\n"));
+  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
 }
-// Keyboard control
+
+// Attach events AFTER page loads
+window.onload = () => {
+  const map = {
+    'btn-up': 'UP',
+    'btn-down': 'DOWN',
+    'btn-left': 'LEFT',
+    'btn-right': 'RIGHT',
+    'btn-a': 'A',
+    'btn-b': 'B'
+  };
+
+  Object.keys(map).forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // Mouse
+    el.addEventListener('mousedown', () => {
+      highlight(id);
+      send(map[id]);
+    });
+
+    // Touch (mobile fix)
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      highlight(id);
+      send(map[id]);
+    });
+  });
+};
+
+// Keyboard
 window.addEventListener('keydown', (e) => {
   switch(e.key) {
-    case 'ArrowUp': press('UP','btn-up'); break;
-    case 'ArrowDown': press('DOWN','btn-down'); break;
-    case 'ArrowLeft': press('LEFT','btn-left'); break;
-    case 'ArrowRight': press('RIGHT','btn-right'); break;
-    case 'a': case 'A': press('A','btn-a'); break;
-    case 'b': case 'B': press('B','btn-b'); break;
+    case 'ArrowUp': highlight('btn-up'); send('UP'); break;
+    case 'ArrowDown': highlight('btn-down'); send('DOWN'); break;
+    case 'ArrowLeft': highlight('btn-left'); send('LEFT'); break;
+    case 'ArrowRight': highlight('btn-right'); send('RIGHT'); break;
+    case 'a': case 'A': highlight('btn-a'); send('A'); break;
+    case 'b': case 'B': highlight('btn-b'); send('B'); break;
   }
 });
 
