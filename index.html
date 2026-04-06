@@ -112,10 +112,10 @@ function startPress(command, id) {
 
   activeIntervals[id] = setInterval(() => {
     send(command);
-  }, 100); // adjust speed here
+  }, 100);
 }
 
-// STOP HOLD
+// STOP HOLD → SEND "S"
 function stopPress(id) {
   highlight(id, false);
 
@@ -123,6 +123,8 @@ function stopPress(id) {
     clearInterval(activeIntervals[id]);
     delete activeIntervals[id];
   }
+
+  send("S"); // 🔥 STOP SIGNAL
 }
 
 window.onload = () => {
@@ -198,6 +200,7 @@ bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () 
   else if(msg == 'RIGHT') basic.showArrow(ArrowNames.East);
   else if(msg == 'A') basic.showString('A');
   else if(msg == 'B') basic.showString('B');
+  else if(msg == 'S') basic.clearScreen(); // STOP behavior
 });
 -->
 
