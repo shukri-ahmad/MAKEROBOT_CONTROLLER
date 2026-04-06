@@ -95,8 +95,7 @@ function send(command) {
   console.log("SEND:", command);
   if (!characteristic) return;
   const encoder = new TextEncoder();
-  characteristic.writeValueWithoutResponse(encoder.encode(command + "
-"));
+  characteristic.writeValueWithoutResponse(encoder.encode(command + " "));
 }
 
 // Attach events AFTER page loads
