@@ -1,63 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Microbit Web Gamepad</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    background: #111;
-    color: white;
-  }
-  button {
-    width: 80px;
-    height: 80px;
-    margin: 10px;
-    font-size: 20px;
-    border-radius: 10px;
-    border: none;
-    background: #333;
-    color: white;
-    transition: transform 0.05s, background 0.1s;
-  }
-  button:active, .active {
-    background: #ff4444 !important;
-    transform: scale(0.95);
-  }
-  .row {
-    display: flex;
-    justify-content: center;
-  }
-  #connect {
-    background: green;
-    width: 200px;
-  }
-</style>
-</head>
-<body>
-
-<h1>Microbit Gamepad</h1>
-<button id="connect">Connect</button>
-
-<div class="row">
-  <button id="btn-up">↑</button>
-</div>
-<div class="row">
-  <button id="btn-left">←</button>
-  <button id="btn-down">↓</button>
-  <button id="btn-right">→</button>
-</div>
-<div class="row">
-  <button id="btn-a">A</button>
-  <button id="btn-b">B</button>
-</div>
-
 <script>
 let device, characteristic;
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const UART_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+let activeIntervals = {}; // track holding buttons
 
 async function connect() {
   try {
@@ -78,23 +24,38 @@ async function connect() {
 }
 document.getElementById('connect').onclick = connect;
 
-function highlight(id) {
+function highlight(id, state) {
   const btn = document.getElementById(id);
   if (!btn) return;
-  btn.classList.add('active');
-  setTimeout(() => btn.classList.remove('active'), 150);
+  if (state) btn.classList.add('active');
+  else btn.classList.remove('active');
 }
 
 function send(command) {
-  console.log("SEND:", command);
   if (!characteristic) return;
   const encoder = new TextEncoder();
   characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
 }
 
-function press(command, id) {
-  highlight(id);
-  send(command);
+// START HOLD
+function startPress(command, id) {
+  if (activeIntervals[id]) return; // already running
+
+  highlight(id, true);
+
+  activeIntervals[id] = setInterval(() => {
+    send(command);
+  }, 100); // send every 100ms (adjust speed here)
+}
+
+// STOP HOLD
+function stopPress(id) {
+  highlight(id, false);
+
+  if (activeIntervals[id]) {
+    clearInterval(activeIntervals[id]);
+    delete activeIntervals[id];
+  }
 }
 
 window.onload = () => {
@@ -110,36 +71,50 @@ window.onload = () => {
   Object.keys(map).forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('mousedown', () => press(map[id], id));
+
+    // Mouse
+    el.addEventListener('mousedown', () => startPress(map[id], id));
+    el.addEventListener('mouseup', () => stopPress(id));
+    el.addEventListener('mouseleave', () => stopPress(id));
+
+    // Touch
     el.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      press(map[id], id);
+      startPress(map[id], id);
     });
+    el.addEventListener('touchend', () => stopPress(id));
+    el.addEventListener('touchcancel', () => stopPress(id));
   });
 };
 
+// Keyboard HOLD support
+let activeKeys = {};
+
 window.addEventListener('keydown', (e) => {
+  if (activeKeys[e.key]) return; // prevent repeat
+
+  activeKeys[e.key] = true;
+
   switch(e.key) {
-    case 'ArrowUp': press('UP','btn-up'); break;
-    case 'ArrowDown': press('DOWN','btn-down'); break;
-    case 'ArrowLeft': press('LEFT','btn-left'); break;
-    case 'ArrowRight': press('RIGHT','btn-right'); break;
-    case 'a': case 'A': press('A','btn-a'); break;
-    case 'b': case 'B': press('B','btn-b'); break;
+    case 'ArrowUp': startPress('UP','btn-up'); break;
+    case 'ArrowDown': startPress('DOWN','btn-down'); break;
+    case 'ArrowLeft': startPress('LEFT','btn-left'); break;
+    case 'ArrowRight': startPress('RIGHT','btn-right'); break;
+    case 'a': case 'A': startPress('A','btn-a'); break;
+    case 'b': case 'B': startPress('B','btn-b'); break;
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  activeKeys[e.key] = false;
+
+  switch(e.key) {
+    case 'ArrowUp': stopPress('btn-up'); break;
+    case 'ArrowDown': stopPress('btn-down'); break;
+    case 'ArrowLeft': stopPress('btn-left'); break;
+    case 'ArrowRight': stopPress('btn-right'); break;
+    case 'a': case 'A': stopPress('btn-a'); break;
+    case 'b': case 'B': stopPress('btn-b'); break;
   }
 });
 </script>
-
-<!-- MICRO:BIT MakeCode JavaScript Code
-bluetooth.startUartService();
-bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
-  let msg = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine));
-  basic.showString(msg);
-  if(msg == 'UP') basic.showArrow(ArrowNames.North);
-  else if(msg == 'DOWN') basic.showArrow(ArrowNames.South);
-  else if(msg == 'LEFT') basic.showArrow(ArrowNames.West);
-  else if(msg == 'RIGHT') basic.showArrow(ArrowNames.East);
-  else if(msg == 'A') basic.showString('A');
-  else if(msg == 'B') basic.showString('B');
-});
--->
