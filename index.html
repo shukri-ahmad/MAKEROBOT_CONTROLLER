@@ -89,17 +89,26 @@ async function connect() {
         { namePrefix: "BBC micro:bit" },
         { namePrefix: "micro:bit" }
       ],
-      optionalServices: [UART_SERVICE]
+      optionalServices: [
+        '6e400001-b5a3-f393-e0a9-e50e24dcca9e' // UART SERVICE
+      ]
     });
 
     const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(UART_SERVICE);
-    characteristic = await service.getCharacteristic(UART_RX);
+
+    // 🔥 IMPORTANT: use getPrimaryServices() first (more reliable)
+    const services = await server.getPrimaryServices();
+
+    console.log("Available services:", services);
+
+    const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+    characteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
 
     alert("Connected to " + device.name);
+
   } catch (err) {
     console.error(err);
-    alert("Connection failed");
+    alert("Connection failed: " + err);
   }
 }
 
