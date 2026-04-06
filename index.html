@@ -1,8 +1,9 @@
 let device, characteristic;
 let transmitInterval;
-let isBusy = false; // New flag to prevent GATT errors
-const SEND_RATE = 150; // Increased slightly for stability
+let isBusy = false; // The "Gatekeeper" flag
+const SEND_RATE = 150; // Slightly slower for better stability
 
+// --- Bluetooth Connection ---
 async function connectBT() {
     const serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
     const txUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
@@ -17,29 +18,31 @@ async function connectBT() {
         characteristic = await service.getCharacteristic(txUuid);
         document.getElementById('status').innerText = "Status: Connected!";
     } catch (error) {
-        console.log(error);
+        console.error("Connection failed:", error);
     }
 }
 
+// --- High-Performance Send Function ---
 async function sendData(data) {
-    // If Bluetooth is still busy with the last message, skip this one
+    // If we are already sending or not connected, exit immediately
     if (!characteristic || isBusy) return;
 
     try {
-        isBusy = true; // Block other sends
+        isBusy = true; // Lock the gate
         const encoder = new TextEncoder();
         await characteristic.writeValue(encoder.encode(data));
     } catch (error) {
-        console.log("Send Error:", error);
+        console.warn("Skipped frame due to GATT congestion.");
     } finally {
-        isBusy = false; // Always unblock, even if it fails
+        isBusy = false; // Unlock the gate for the next command
     }
 }
 
+// --- Control Logic ---
 function startAction(cmd) {
     if (transmitInterval) clearInterval(transmitInterval);
     
-    sendData(cmd);
+    sendData(cmd); // Send first burst immediately
     transmitInterval = setInterval(() => {
         sendData(cmd);
     }, SEND_RATE);
@@ -49,21 +52,23 @@ function stopAction() {
     clearInterval(transmitInterval);
     transmitInterval = null;
     
-    // We use a small timeout for the Stop command to ensure 
-    // the very last "Move" command has cleared the GATT buffer.
+    // Give the GATT queue a tiny 50ms rest before sending the Stop command
     setTimeout(() => {
-        sendData('S');
-    }, 50); 
+        sendData('S'); 
+    }, 50);
 }
 
+// --- Event Listeners ---
 function setupButton(id, command) {
     const btn = document.getElementById(id);
-    if(!btn) return;
+    if (!btn) return;
 
+    // Mouse Events
     btn.addEventListener('mousedown', () => startAction(command));
     btn.addEventListener('mouseup', stopAction);
     btn.addEventListener('mouseleave', stopAction);
 
+    // Touch Events
     btn.addEventListener('touchstart', (e) => {
         e.preventDefault();
         startAction(command);
@@ -71,7 +76,7 @@ function setupButton(id, command) {
     btn.addEventListener('touchend', stopAction);
 }
 
-// Initialize
+// Map your buttons
 setupButton('btn-F', 'F');
 setupButton('btn-B', 'B');
 setupButton('btn-L', 'L');
