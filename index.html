@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Microbit Web Gamepad</title>
+<title>Microbit Gamepad</title>
 
 <style>
   body {
@@ -104,8 +104,8 @@ function send(command) {
   );
 }
 
-// START HOLD
-function startPress(command, id) {
+// HOLD movement
+function startMove(command, id) {
   if (activeIntervals[id]) return;
 
   highlight(id, true);
@@ -115,8 +115,8 @@ function startPress(command, id) {
   }, 100);
 }
 
-// STOP HOLD → SEND "S"
-function stopPress(id) {
+// RELEASE → STOP
+function stopMove(id) {
   highlight(id, false);
 
   if (activeIntervals[id]) {
@@ -124,52 +124,86 @@ function stopPress(id) {
     delete activeIntervals[id];
   }
 
-  send("S"); // 🔥 STOP SIGNAL
+  send("S"); // 🔥 immediate STOP
 }
 
 window.onload = () => {
-  const map = {
+
+  // MOVEMENT (HOLD)
+  const moveMap = {
     'btn-up': 'UP',
     'btn-down': 'DOWN',
     'btn-left': 'LEFT',
-    'btn-right': 'RIGHT',
-    'btn-a': 'A',
-    'btn-b': 'B'
+    'btn-right': 'RIGHT'
   };
 
-  Object.keys(map).forEach(id => {
+  Object.keys(moveMap).forEach(id => {
     const el = document.getElementById(id);
-    if (!el) return;
 
     // Mouse
-    el.addEventListener('mousedown', () => startPress(map[id], id));
-    el.addEventListener('mouseup', () => stopPress(id));
-    el.addEventListener('mouseleave', () => stopPress(id));
+    el.addEventListener('mousedown', () => startMove(moveMap[id], id));
+    el.addEventListener('mouseup', () => stopMove(id));
+    el.addEventListener('mouseleave', () => stopMove(id));
 
     // Touch
     el.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      startPress(map[id], id);
+      startMove(moveMap[id], id);
     });
-    el.addEventListener('touchend', () => stopPress(id));
-    el.addEventListener('touchcancel', () => stopPress(id));
+    el.addEventListener('touchend', () => stopMove(id));
+    el.addEventListener('touchcancel', () => stopMove(id));
+  });
+
+  // A/B buttons (single press)
+  const clickMap = {
+    'btn-a': 'A',
+    'btn-b': 'B'
+  };
+
+  Object.keys(clickMap).forEach(id => {
+    const el = document.getElementById(id);
+
+    el.addEventListener('mousedown', () => {
+      highlight(id, true);
+      send(clickMap[id]);
+    });
+
+    el.addEventListener('mouseup', () => highlight(id, false));
+    el.addEventListener('mouseleave', () => highlight(id, false));
+
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      highlight(id, true);
+      send(clickMap[id]);
+    });
+
+    el.addEventListener('touchend', () => highlight(id, false));
+    el.addEventListener('touchcancel', () => highlight(id, false));
   });
 };
 
-// Keyboard HOLD
+// KEYBOARD
 window.addEventListener('keydown', (e) => {
   if (activeKeys[e.key]) return;
   activeKeys[e.key] = true;
 
   switch(e.key) {
-    case 'ArrowUp': startPress('UP','btn-up'); break;
-    case 'ArrowDown': startPress('DOWN','btn-down'); break;
-    case 'ArrowLeft': startPress('LEFT','btn-left'); break;
-    case 'ArrowRight': startPress('RIGHT','btn-right'); break;
+    case 'ArrowUp': startMove('UP','btn-up'); break;
+    case 'ArrowDown': startMove('DOWN','btn-down'); break;
+    case 'ArrowLeft': startMove('LEFT','btn-left'); break;
+    case 'ArrowRight': startMove('RIGHT','btn-right'); break;
+
     case 'a':
-    case 'A': startPress('A','btn-a'); break;
+    case 'A':
+      highlight('btn-a', true);
+      send('A');
+      break;
+
     case 'b':
-    case 'B': startPress('B','btn-b'); break;
+    case 'B':
+      highlight('btn-b', true);
+      send('B');
+      break;
   }
 });
 
@@ -177,32 +211,23 @@ window.addEventListener('keyup', (e) => {
   activeKeys[e.key] = false;
 
   switch(e.key) {
-    case 'ArrowUp': stopPress('btn-up'); break;
-    case 'ArrowDown': stopPress('btn-down'); break;
-    case 'ArrowLeft': stopPress('btn-left'); break;
-    case 'ArrowRight': stopPress('btn-right'); break;
+    case 'ArrowUp': stopMove('btn-up'); break;
+    case 'ArrowDown': stopMove('btn-down'); break;
+    case 'ArrowLeft': stopMove('btn-left'); break;
+    case 'ArrowRight': stopMove('btn-right'); break;
+
     case 'a':
-    case 'A': stopPress('btn-a'); break;
+    case 'A':
+      highlight('btn-a', false);
+      break;
+
     case 'b':
-    case 'B': stopPress('btn-b'); break;
+    case 'B':
+      highlight('btn-b', false);
+      break;
   }
 });
 </script>
-
-<!-- MICRO:BIT MakeCode Code
-bluetooth.startUartService();
-bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
-  let msg = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine));
-
-  if(msg == 'UP') basic.showArrow(ArrowNames.North);
-  else if(msg == 'DOWN') basic.showArrow(ArrowNames.South);
-  else if(msg == 'LEFT') basic.showArrow(ArrowNames.West);
-  else if(msg == 'RIGHT') basic.showArrow(ArrowNames.East);
-  else if(msg == 'A') basic.showString('A');
-  else if(msg == 'B') basic.showString('B');
-  else if(msg == 'S') basic.clearScreen(); // STOP behavior
-});
--->
 
 </body>
 </html>
