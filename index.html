@@ -1,107 +1,171 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Microbit Debug Controller</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <style>
-        body { font-family: sans-serif; background: #111; color: white; text-align: center; }
-        .grid { display: grid; grid-template-areas: ". up ." "left . right" ". down ."; justify-content: center; gap: 10px; margin: 20px; }
-        button { width: 80px; height: 80px; background: #444; color: white; border: none; border-radius: 10px; font-size: 24px; touch-action: none; }
-        #connect { width: 200px; height: 50px; background: green; margin: 20px; }
-        .active { background: red !important; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Microbit Web Gamepad</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    text-align: center;
+    background: #111;
+    color: white;
+  }
+  button {
+    width: 80px;
+    height: 80px;
+    margin: 10px;
+    font-size: 20px;
+    border-radius: 10px;
+    border: none;
+    background: #333;
+    color: white;
+    transition: transform 0.05s, background 0.1s;
+  }
+  button:active {
+    background: #ff4444;
+    transform: scale(0.95);
+  }
+  .active {
+    background: #ff4444 !important;
+    transform: scale(0.95);
+  }
+  .row {
+    display: flex;
+    justify-content: center;
+  }
+  #connect {
+    background: green;
+    width: 200px;
+  }
+</style>
 </head>
 <body>
 
-    <h1>Joystick Debug</h1>
-    <button id="connect">1. CONNECT</button>
-    <div id="status">Status: Not Connected</div>
+<h1>Microbit Gamepad</h1>
+<button id="connect">Connect</button>
 
-    <div class="grid">
-        <button style="grid-area: up" id="F">↑</button>
-        <button style="grid-area: left" id="L">←</button>
-        <button style="grid-area: right" id="R">→</button>
-        <button style="grid-area: down" id="B">↓</button>
-    </div>
-
-    <button id="A" style="background: blue; width: 60px;">A</button>
-    <button id="X" style="background: purple; width: 60px;">B</button>
+<div class="row">
+  <button id="btn-up" onclick="press('UP','btn-up')">↑</button>
+</div>
+<div class="row">
+  <button id="btn-left" onclick="press('LEFT','btn-left')">←</button>
+  <button id="btn-down" onclick="press('DOWN','btn-down')">↓</button>
+  <button id="btn-right" onclick="press('RIGHT','btn-right')">→</button>
+</div>
+<div class="row">
+  <button id="btn-a" onclick="press('A','btn-a')">A</button>
+  <button id="btn-b" onclick="press('B','btn-b')">B</button>
+</div>
 
 <script>
-let uart;
-const SERVICE_ID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const TX_ID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+let device, characteristic;
 
-// 1. Connect Logic
-document.getElementById('connect').onclick = async () => {
-    console.log("Connect button clicked");
-    try {
-        const device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: "BBC micro:bit" }],
-            optionalServices: [SERVICE_ID]
-        });
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(SERVICE_ID);
-        uart = await service.getCharacteristic(TX_ID);
-        document.getElementById('status').innerText = "Status: CONNECTED";
-        console.log("Bluetooth Connected & UART Ready");
-    } catch (e) {
-        console.log("Connection Error: " + e);
-    }
+const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+async function connect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "BBC micro:bit" }],
+      optionalServices: [UART_SERVICE]
+    });
+
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(UART_SERVICE);
+    characteristic = await service.getCharacteristic(UART_RX);
+
+    alert("Connected!");
+  } catch (err) {
+    console.error(err);
+    alert("Connection failed");
+  }
+}
+
+document.getElementById('connect').onclick = connect;
+
+function highlight(id) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.classList.add('active');
+  setTimeout(() => btn.classList.remove('active'), 150);
+}
+
+function send(command) {
+  console.log("SEND:", command);
+  if (!characteristic) return;
+  const encoder = new TextEncoder();
+  characteristic.writeValueWithoutResponse(encoder.encode(command + "
+"));
+}
+
+// Attach events AFTER page loads
+window.onload = () => {
+  const map = {
+    'btn-up': 'UP',
+    'btn-down': 'DOWN',
+    'btn-left': 'LEFT',
+    'btn-right': 'RIGHT',
+    'btn-a': 'A',
+    'btn-b': 'B'
+  };
+
+  Object.keys(map).forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // Mouse
+    el.addEventListener('mousedown', () => {
+      highlight(id);
+      send(map[id]);
+    });
+
+    // Touch (mobile fix)
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      highlight(id);
+      send(map[id]);
+    });
+  });
 };
 
-// 2. The Send Function
-let isSending = false;
-
-async function sendData(cmd) {
-    if (!uart || isSending) return;
-    
-    isSending = true;
-    try {
-        const encoder = new TextEncoder();
-        // Sending command + NewLine (\n)
-        await uart.writeValueWithResponse(encoder.encode(cmd + "\n"));
-        console.log("Sent:", cmd);
-    } catch (e) {
-        console.log("Send Error:", e);
-    }
-    
-    // Small delay to prevent jamming the Bluetooth radio
-    setTimeout(() => { isSending = false; }, 50);
-}
-    
-// 3. Attach Events to ALL buttons
-const buttons = ["F", "B", "L", "R", "A", "X"];
-
-buttons.forEach(id => {
-    const btn = document.getElementById(id);
-    
-    // Function for Press
-    const onPress = (e) => {
-        e.preventDefault();
-        console.log("Button Pressed:", id);
-        btn.classList.add('active');
-        sendData(id);
-    };
-
-    // Function for Release
-    const onRelease = (e) => {
-        e.preventDefault();
-        console.log("Button Released:", id);
-        btn.classList.remove('active');
-        sendData("S"); // Send STOP
-    };
-
-    // Mouse Events
-    btn.addEventListener('mousedown', onPress);
-    btn.addEventListener('mouseup', onRelease);
-    
-    // Touch Events (Mobile)
-    btn.addEventListener('touchstart', onPress);
-    btn.addEventListener('touchend', onRelease);
+// Keyboard
+window.addEventListener('keydown', (e) => {
+  switch(e.key) {
+    case 'ArrowUp': highlight('btn-up'); send('UP'); break;
+    case 'ArrowDown': highlight('btn-down'); send('DOWN'); break;
+    case 'ArrowLeft': highlight('btn-left'); send('LEFT'); break;
+    case 'ArrowRight': highlight('btn-right'); send('RIGHT'); break;
+    case 'a': case 'A': highlight('btn-a'); send('A'); break;
+    case 'b': case 'B': highlight('btn-b'); send('B'); break;
+  }
 });
 
-console.log("Script loaded and events attached.");
 </script>
+
 </body>
 </html>
+
+<!-- ================= MICRO:BIT CODE (MakeCode JavaScript) =================
+
+bluetooth.startUartService();
+
+bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
+    let msg = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine));
+
+    if (msg == "UP") {
+        basic.showArrow(ArrowNames.North);
+    } else if (msg == "DOWN") {
+        basic.showArrow(ArrowNames.South);
+    } else if (msg == "LEFT") {
+        basic.showArrow(ArrowNames.West);
+    } else if (msg == "RIGHT") {
+        basic.showArrow(ArrowNames.East);
+    } else if (msg == "A") {
+        basic.showString("A");
+    } else if (msg == "B") {
+        basic.showString("B");
+    }
+});
+
+========================================================================== -->
