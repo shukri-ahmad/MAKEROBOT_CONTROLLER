@@ -1,111 +1,79 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>MAKEROBOT CONTROLLER - Pro</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
-        .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 10px; justify-content: center; margin-top: 20px; }
-        button { 
-            padding: 20px; font-size: 18px; cursor: pointer; 
-            user-select: none; -webkit-user-select: none; 
-            background: #444; color: white; border: 2px solid #666; border-radius: 10px;
-        }
-        button:active { background: #00ff00; color: black; }
-        .connect-btn { background: #008cba; padding: 10px 30px; margin-bottom: 20px; }
-    </style>
-</head>
-<body>
+let device, characteristic;
+let transmitInterval;
+let isBusy = false; // New flag to prevent GATT errors
+const SEND_RATE = 150; // Increased slightly for stability
 
-    <h1>Makerobot Controller</h1>
-    <button class="connect-btn" onclick="connectBT()">Connect Micro:bit</button>
-    <p id="status">Status: Disconnected</p>
+async function connectBT() {
+    const serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+    const txUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
-    <div class="grid">
-        <div></div>
-        <button id="btn-F">▲</button>
-        <div></div>
+    try {
+        device = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'BBC micro:bit' }],
+            optionalServices: [serviceUuid]
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(serviceUuid);
+        characteristic = await service.getCharacteristic(txUuid);
+        document.getElementById('status').innerText = "Status: Connected!";
+    } catch (error) {
+        console.log(error);
+    }
+}
 
-        <button id="btn-L">◀</button>
-        <button id="btn-S" style="background: #900;">■</button>
-        <button id="btn-R">▶</button>
+async function sendData(data) {
+    // If Bluetooth is still busy with the last message, skip this one
+    if (!characteristic || isBusy) return;
 
-        <div></div>
-        <button id="btn-B">▼</button>
-        <div></div>
-    </div>
+    try {
+        isBusy = true; // Block other sends
+        const encoder = new TextEncoder();
+        await characteristic.writeValue(encoder.encode(data));
+    } catch (error) {
+        console.log("Send Error:", error);
+    } finally {
+        isBusy = false; // Always unblock, even if it fails
+    }
+}
 
-    <script>
-        let device, characteristic;
-        let transmitInterval;
-        const SEND_RATE = 100; // ms
+function startAction(cmd) {
+    if (transmitInterval) clearInterval(transmitInterval);
+    
+    sendData(cmd);
+    transmitInterval = setInterval(() => {
+        sendData(cmd);
+    }, SEND_RATE);
+}
 
-        // --- Bluetooth Logic ---
-        async function connectBT() {
-            const serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"; // UART Service
-            const txUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+function stopAction() {
+    clearInterval(transmitInterval);
+    transmitInterval = null;
+    
+    // We use a small timeout for the Stop command to ensure 
+    // the very last "Move" command has cleared the GATT buffer.
+    setTimeout(() => {
+        sendData('S');
+    }, 50); 
+}
 
-            try {
-                device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'BBC micro:bit' }],
-                    optionalServices: [serviceUuid]
-                });
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService(serviceUuid);
-                characteristic = await service.getCharacteristic(txUuid);
-                document.getElementById('status').innerText = "Status: Connected!";
-            } catch (error) {
-                console.log(error);
-                alert("Connection failed. Ensure Bluetooth is on.");
-            }
-        }
+function setupButton(id, command) {
+    const btn = document.getElementById(id);
+    if(!btn) return;
 
-        async function sendData(data) {
-            if (!characteristic) return;
-            const encoder = new TextEncoder();
-            await characteristic.writeValue(encoder.encode(data));
-        }
+    btn.addEventListener('mousedown', () => startAction(command));
+    btn.addEventListener('mouseup', stopAction);
+    btn.addEventListener('mouseleave', stopAction);
 
-        // --- Press & Hold Logic ---
-        function startAction(cmd) {
-            if (transmitInterval) clearInterval(transmitInterval);
-            
-            sendData(cmd); // Initial send
-            transmitInterval = setInterval(() => {
-                sendData(cmd);
-            }, SEND_RATE);
-        }
+    btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        startAction(command);
+    }, { passive: false });
+    btn.addEventListener('touchend', stopAction);
+}
 
-        function stopAction() {
-            clearInterval(transmitInterval);
-            transmitInterval = null;
-            sendData('S'); // Send 'S' for Stop
-        }
-
-        // --- Event Listener Mapping ---
-        function setupButton(id, command) {
-            const btn = document.getElementById(id);
-            
-            // Mouse Events
-            btn.addEventListener('mousedown', () => startAction(command));
-            btn.addEventListener('mouseup', stopAction);
-            btn.addEventListener('mouseleave', stopAction);
-
-            // Touch Events
-            btn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                startAction(command);
-            });
-            btn.addEventListener('touchend', stopAction);
-        }
-
-        // Initialize buttons
-        setupButton('btn-F', 'F');
-        setupButton('btn-B', 'B');
-        setupButton('btn-L', 'L');
-        setupButton('btn-R', 'R');
-        setupButton('btn-S', 'S');
-
-    </script>
-</body>
-</html>
+// Initialize
+setupButton('btn-F', 'F');
+setupButton('btn-B', 'B');
+setupButton('btn-L', 'L');
+setupButton('btn-R', 'R');
+setupButton('btn-S', 'S');
