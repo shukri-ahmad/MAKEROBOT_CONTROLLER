@@ -52,20 +52,17 @@ document.getElementById('connect').onclick = async () => {
 
 // 2. The Send Function
 async function sendData(cmd) {
-    console.log("Attempting to send:", cmd); // THIS MUST APPEAR IN CONSOLE
-    if (!uart) {
-        console.log("Send aborted: Not connected to Microbit");
-        return;
-    }
+    if (!uart) return;
     try {
         const encoder = new TextEncoder();
-        await uart.writeValueWithResponse(encoder.encode(cmd + "\n"));
-        console.log("Successfully sent to Microbit:", cmd);
+        // Change \n to a space " " to match the new Microbit code
+        await uart.writeValueWithResponse(encoder.encode(cmd + " ")); 
+        console.log("Sent to Microbit:", cmd);
     } catch (e) {
-        console.log("Bluetooth Send Error:", e);
+        console.log("Send Error:", e);
     }
 }
-
+    
 // 3. Attach Events to ALL buttons
 const buttons = ["F", "B", "L", "R", "A", "X"];
 
