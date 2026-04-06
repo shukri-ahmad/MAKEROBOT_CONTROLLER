@@ -1,79 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Microbit Web Gamepad</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; touch-action: manipulation; }
+  button { width: 80px; height: 80px; margin: 10px; font-size: 20px; border-radius: 10px; border: none; background: #333; color: white; }
+  .active { background: #ff4444 !important; transform: scale(0.95); }
+  .row { display: flex; justify-content: center; }
+  #connect { background: green; width: 200px; height: 50px;}
+</style>
+</head>
+<body>
+
+<h1>Microbit Gamepad</h1>
+<button id="connect">Connect</button>
+
+<div class="row">
+  <button id="btn-up">↑</button>
+</div>
+<div class="row">
+  <button id="btn-left">←</button>
+  <button id="btn-down">↓</button>
+  <button id="btn-right">→</button>
+</div>
+<div class="row">
+  <button id="btn-a">A</button>
+  <button id="btn-b">B</button>
+</div>
+
+<script>
 let device, characteristic;
-let transmitInterval;
-let isBusy = false; // New flag to prevent GATT errors
-const SEND_RATE = 150; // Increased slightly for stability
+const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
-async function connectBT() {
-    const serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    const txUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
-
-    try {
-        device = await navigator.bluetooth.requestDevice({
-            filters: [{ namePrefix: 'BBC micro:bit' }],
-            optionalServices: [serviceUuid]
-        });
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(serviceUuid);
-        characteristic = await service.getCharacteristic(txUuid);
-        document.getElementById('status').innerText = "Status: Connected!";
-    } catch (error) {
-        console.log(error);
-    }
+async function connect() {
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "BBC micro:bit" }],
+      optionalServices: [UART_SERVICE]
+    });
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(UART_SERVICE);
+    characteristic = await service.getCharacteristic(UART_RX);
+    alert("Connected!");
+  } catch (err) {
+    alert("Connection failed");
+  }
 }
 
-async function sendData(data) {
-    // If Bluetooth is still busy with the last message, skip this one
-    if (!characteristic || isBusy) return;
+document.getElementById('connect').onclick = connect;
 
-    try {
-        isBusy = true; // Block other sends
-        const encoder = new TextEncoder();
-        await characteristic.writeValue(encoder.encode(data));
-    } catch (error) {
-        console.log("Send Error:", error);
-    } finally {
-        isBusy = false; // Always unblock, even if it fails
-    }
+function send(command) {
+  if (!characteristic) return;
+  const encoder = new TextEncoder();
+  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
 }
 
-function startAction(cmd) {
-    if (transmitInterval) clearInterval(transmitInterval);
-    
-    sendData(cmd);
-    transmitInterval = setInterval(() => {
-        sendData(cmd);
-    }, SEND_RATE);
+const map = {
+  'btn-up': 'UP', 'btn-down': 'DOWN', 'btn-left': 'LEFT', 
+  'btn-right': 'RIGHT', 'btn-a': 'A', 'btn-b': 'B'
+};
+
+const keyMap = {
+  'ArrowUp': 'btn-up', 'ArrowDown': 'btn-down', 'ArrowLeft': 'btn-left',
+  'ArrowRight': 'btn-right', 'a': 'btn-a', 'b': 'btn-b'
+};
+
+// Handle Press and Release
+function handleStart(id) {
+    document.getElementById(id).classList.add('active');
+    send(map[id]);
 }
 
-function stopAction() {
-    clearInterval(transmitInterval);
-    transmitInterval = null;
-    
-    // We use a small timeout for the Stop command to ensure 
-    // the very last "Move" command has cleared the GATT buffer.
-    setTimeout(() => {
-        sendData('S');
-    }, 50); 
+function handleEnd(id) {
+    document.getElementById(id).classList.remove('active');
+    send("STOP");
 }
 
-function setupButton(id, command) {
-    const btn = document.getElementById(id);
-    if(!btn) return;
+Object.keys(map).forEach(id => {
+  const el = document.getElementById(id);
+  // Mouse Events
+  el.addEventListener('mousedown', () => handleStart(id));
+  el.addEventListener('mouseup', () => handleEnd(id));
+  // Touch Events
+  el.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(id); });
+  el.addEventListener('touchend', (e) => { e.preventDefault(); handleEnd(id); });
+});
 
-    btn.addEventListener('mousedown', () => startAction(command));
-    btn.addEventListener('mouseup', stopAction);
-    btn.addEventListener('mouseleave', stopAction);
+// Keyboard Events
+window.addEventListener('keydown', (e) => {
+  const id = keyMap[e.key.toLowerCase()] || keyMap[e.key];
+  if (id && !document.getElementById(id).classList.contains('active')) {
+    handleStart(id);
+  }
+});
 
-    btn.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        startAction(command);
-    }, { passive: false });
-    btn.addEventListener('touchend', stopAction);
-}
-
-// Initialize
-setupButton('btn-F', 'F');
-setupButton('btn-B', 'B');
-setupButton('btn-L', 'L');
-setupButton('btn-R', 'R');
-setupButton('btn-S', 'S');
+window.addEventListener('keyup', (e) => {
+  const id = keyMap[e.key.toLowerCase()] || keyMap[e.key];
+  if (id) handleEnd(id);
+});
+</script>
+</body>
+</html>
