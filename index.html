@@ -1,106 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Microbit Web Gamepad</title>
-<style>
-  body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; touch-action: manipulation; }
-  button { width: 80px; height: 80px; margin: 10px; font-size: 20px; border-radius: 10px; border: none; background: #333; color: white; }
-  .active { background: #ff4444 !important; transform: scale(0.95); }
-  .row { display: flex; justify-content: center; }
-  #connect { background: green; width: 200px; height: 50px;}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MAKEROBOT CONTROLLER</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            touch-action: manipulation;
+        }
+
+        .status-container {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #333;
+        }
+
+        .connect-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+        }
+
+        .connect-btn:active { transform: scale(0.98); }
+
+        /* D-Pad Layout */
+        .controller-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 80px);
+            grid-template-rows: repeat(3, 80px);
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .control-btn {
+            width: 80px;
+            height: 80px;
+            background-color: #444;
+            color: white;
+            border: 2px solid #666;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.1s;
+        }
+
+        /* Active State / Pressed Visuals */
+        .control-btn:active {
+            background-color: #00ff00;
+            color: #000;
+            border-color: #fff;
+        }
+
+        #btn-S { background-color: #8b0000; }
+        #btn-S:active { background-color: #ff0000; }
+
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
 
-<h1>Microbit Gamepad</h1>
-<button id="connect">Connect</button>
+    <h1>Robot Controller</h1>
 
-<div class="row">
-  <button id="btn-up">↑</button>
-</div>
-<div class="row">
-  <button id="btn-left">←</button>
-  <button id="btn-down">↓</button>
-  <button id="btn-right">→</button>
-</div>
-<div class="row">
-  <button id="btn-a">A</button>
-  <button id="btn-b">B</button>
-</div>
+    <div class="status-container">
+        <p id="status">Status: Disconnected</p>
+        <button class="connect-btn" onclick="connectBT()">Connect Micro:bit</button>
+    </div>
 
-<script>
-let device, characteristic;
-const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const UART_RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+    <div class="controller-grid">
+        <div></div>
+        <button id="btn-F" class="control-btn">▲</button>
+        <div></div>
 
-async function connect() {
-  try {
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "BBC micro:bit" }],
-      optionalServices: [UART_SERVICE]
-    });
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(UART_SERVICE);
-    characteristic = await service.getCharacteristic(UART_RX);
-    alert("Connected!");
-  } catch (err) {
-    alert("Connection failed");
-  }
-}
+        <button id="btn-L" class="control-btn">◀</button>
+        <button id="btn-S" class="control-btn">■</button>
+        <button id="btn-R" class="control-btn">▶</button>
 
-document.getElementById('connect').onclick = connect;
+        <div></div>
+        <button id="btn-B" class="control-btn">▼</button>
+        <div></div>
+    </div>
 
-function send(command) {
-  if (!characteristic) return;
-  const encoder = new TextEncoder();
-  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
-}
+    <script>
+        let device, characteristic;
+        let transmitInterval;
+        let isBusy = false; 
+        const SEND_RATE = 150; 
 
-const map = {
-  'btn-up': 'UP', 'btn-down': 'DOWN', 'btn-left': 'LEFT', 
-  'btn-right': 'RIGHT', 'btn-a': 'A', 'btn-b': 'B'
-};
+        // --- Bluetooth Connection ---
+        async function connectBT() {
+            const serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+            const txUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
-const keyMap = {
-  'ArrowUp': 'btn-up', 'ArrowDown': 'btn-down', 'ArrowLeft': 'btn-left',
-  'ArrowRight': 'btn-right', 'a': 'btn-a', 'b': 'btn-b'
-};
+            try {
+                document.getElementById('status').innerText = "Status: Searching...";
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'BBC micro:bit' }],
+                    optionalServices: [serviceUuid]
+                });
+                
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(serviceUuid);
+                characteristic = await service.getCharacteristic(txUuid);
+                
+                document.getElementById('status').innerText = "Status: Connected!";
+                document.getElementById('status').style.color = "#00ff00";
+            } catch (error) {
+                console.error("Connection failed:", error);
+                document.getElementById('status').innerText = "Status: Error/Cancelled";
+            }
+        }
 
-// Handle Press and Release
-function handleStart(id) {
-    document.getElementById(id).classList.add('active');
-    send(map[id]);
-}
+        // --- High-Performance Send Function ---
+        async function sendData(data) {
+            if (!characteristic || isBusy) return;
 
-function handleEnd(id) {
-    document.getElementById(id).classList.remove('active');
-    send("STOP");
-}
+            try {
+                isBusy = true; 
+                const encoder = new TextEncoder();
+                await characteristic.writeValue(encoder.encode(data));
+            } catch (error) {
+                // Silently skip if GATT is busy to prevent console spam
+            } finally {
+                isBusy = false; 
+            }
+        }
 
-Object.keys(map).forEach(id => {
-  const el = document.getElementById(id);
-  // Mouse Events
-  el.addEventListener('mousedown', () => handleStart(id));
-  el.addEventListener('mouseup', () => handleEnd(id));
-  // Touch Events
-  el.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(id); });
-  el.addEventListener('touchend', (e) => { e.preventDefault(); handleEnd(id); });
-});
+        // --- Control Logic ---
+        function startAction(cmd) {
+            if (transmitInterval) clearInterval(transmitInterval);
+            
+            sendData(cmd); 
+            transmitInterval = setInterval(() => {
+                sendData(cmd);
+            }, SEND_RATE);
+        }
 
-// Keyboard Events
-window.addEventListener('keydown', (e) => {
-  const id = keyMap[e.key.toLowerCase()] || keyMap[e.key];
-  if (id && !document.getElementById(id).classList.contains('active')) {
-    handleStart(id);
-  }
-});
+        function stopAction() {
+            clearInterval(transmitInterval);
+            transmitInterval = null;
+            
+            // Short delay to let the move command clear before sending Stop
+            setTimeout(() => {
+                sendData('S'); 
+            }, 50);
+        }
 
-window.addEventListener('keyup', (e) => {
-  const id = keyMap[e.key.toLowerCase()] || keyMap[e.key];
-  if (id) handleEnd(id);
-});
-</script>
+        // --- Setup Event Listeners ---
+        function setupButton(id, command) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+
+            // PC Support
+            btn.addEventListener('mousedown', () => startAction(command));
+            btn.addEventListener('mouseup', stopAction);
+            btn.addEventListener('mouseleave', stopAction);
+
+            // Mobile Support
+            btn.addEventListener('touchstart', (e) => {
+                if (e.cancelable) e.preventDefault();
+                startAction(command);
+            }, { passive: false });
+            btn.addEventListener('touchend', stopAction);
+        }
+
+        // Initialize Buttons
+        setupButton('btn-F', 'F');
+        setupButton('btn-B', 'B');
+        setupButton('btn-L', 'L');
+        setupButton('btn-R', 'R');
+        setupButton('btn-S', 'S');
+
+    </script>
 </body>
 </html>
