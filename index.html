@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Microbit Web Gamepad</title>
+
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -36,6 +37,7 @@
   }
 </style>
 </head>
+
 <body>
 
 <h1>Microbit Gamepad</h1>
@@ -44,11 +46,13 @@
 <div class="row">
   <button id="btn-up">↑</button>
 </div>
+
 <div class="row">
   <button id="btn-left">←</button>
   <button id="btn-down">↓</button>
   <button id="btn-right">→</button>
 </div>
+
 <div class="row">
   <button id="btn-a">A</button>
   <button id="btn-b">B</button>
@@ -56,6 +60,7 @@
 
 <script>
 let device, characteristic;
+
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const UART_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
@@ -79,21 +84,27 @@ async function connect() {
     alert("Connection failed");
   }
 }
+
 document.getElementById('connect').onclick = connect;
 
 function highlight(id, state) {
   const btn = document.getElementById(id);
   if (!btn) return;
+
   if (state) btn.classList.add('active');
   else btn.classList.remove('active');
 }
 
 function send(command) {
   if (!characteristic) return;
+
   const encoder = new TextEncoder();
-  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
+  characteristic.writeValueWithoutResponse(
+    encoder.encode(command + "\n")
+  );
 }
 
+// START HOLD
 function startPress(command, id) {
   if (activeIntervals[id]) return;
 
@@ -101,9 +112,10 @@ function startPress(command, id) {
 
   activeIntervals[id] = setInterval(() => {
     send(command);
-  }, 100);
+  }, 100); // adjust speed here
 }
 
+// STOP HOLD
 function stopPress(id) {
   highlight(id, false);
 
@@ -127,19 +139,22 @@ window.onload = () => {
     const el = document.getElementById(id);
     if (!el) return;
 
+    // Mouse
     el.addEventListener('mousedown', () => startPress(map[id], id));
     el.addEventListener('mouseup', () => stopPress(id));
     el.addEventListener('mouseleave', () => stopPress(id));
 
+    // Touch
     el.addEventListener('touchstart', (e) => {
       e.preventDefault();
       startPress(map[id], id);
     });
     el.addEventListener('touchend', () => stopPress(id));
-    el.addEventListener('touchcancel', () => stopPress(id);
+    el.addEventListener('touchcancel', () => stopPress(id));
   });
 };
 
+// Keyboard HOLD
 window.addEventListener('keydown', (e) => {
   if (activeKeys[e.key]) return;
   activeKeys[e.key] = true;
@@ -149,8 +164,10 @@ window.addEventListener('keydown', (e) => {
     case 'ArrowDown': startPress('DOWN','btn-down'); break;
     case 'ArrowLeft': startPress('LEFT','btn-left'); break;
     case 'ArrowRight': startPress('RIGHT','btn-right'); break;
-    case 'a': case 'A': startPress('A','btn-a'); break;
-    case 'b': case 'B': startPress('B','btn-b'); break;
+    case 'a':
+    case 'A': startPress('A','btn-a'); break;
+    case 'b':
+    case 'B': startPress('B','btn-b'); break;
   }
 });
 
@@ -162,17 +179,19 @@ window.addEventListener('keyup', (e) => {
     case 'ArrowDown': stopPress('btn-down'); break;
     case 'ArrowLeft': stopPress('btn-left'); break;
     case 'ArrowRight': stopPress('btn-right'); break;
-    case 'a': case 'A': stopPress('btn-a'); break;
-    case 'b': case 'B': stopPress('btn-b'); break;
+    case 'a':
+    case 'A': stopPress('btn-a'); break;
+    case 'b':
+    case 'B': stopPress('btn-b'); break;
   }
 });
 </script>
 
-<!-- MICRO:BIT MakeCode JavaScript Code
+<!-- MICRO:BIT MakeCode Code
 bluetooth.startUartService();
 bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
   let msg = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine));
-  basic.showString(msg);
+
   if(msg == 'UP') basic.showArrow(ArrowNames.North);
   else if(msg == 'DOWN') basic.showArrow(ArrowNames.South);
   else if(msg == 'LEFT') basic.showArrow(ArrowNames.West);
