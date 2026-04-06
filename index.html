@@ -68,8 +68,11 @@ const keyMap = {
 // Connect to micro:bit via Web Bluetooth
 async function connectMicrobit() {
   try {
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: ['e95d0753-251d-470a-a062-fa1922dfa9a8'] }] // example service UUID
+    
+const device = await navigator.bluetooth.requestDevice({
+  acceptAllDevices: true,
+  optionalServices: ['e95d0753-251d-470a-a062-fa1922dfa9a8']
+});
     });
 
     const server = await device.gatt.connect();
