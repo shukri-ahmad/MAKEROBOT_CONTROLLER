@@ -20,6 +20,15 @@
     border: none;
     background: #333;
     color: white;
+    transition: transform 0.05s, background 0.1s;
+  }
+  button:active {
+    background: #ff4444;
+    transform: scale(0.95);
+  }
+  .active {
+    background: #ff4444 !important;
+    transform: scale(0.95);
   }
   .row {
     display: flex;
@@ -37,16 +46,16 @@
 <button id="connect">Connect</button>
 
 <div class="row">
-  <button onclick="send('UP')">↑</button>
+  <button id="btn-up" onclick="press('UP','btn-up')">↑</button>
 </div>
 <div class="row">
-  <button onclick="send('LEFT')">←</button>
-  <button onclick="send('DOWN')">↓</button>
-  <button onclick="send('RIGHT')">→</button>
+  <button id="btn-left" onclick="press('LEFT','btn-left')">←</button>
+  <button id="btn-down" onclick="press('DOWN','btn-down')">↓</button>
+  <button id="btn-right" onclick="press('RIGHT','btn-right')">→</button>
 </div>
 <div class="row">
-  <button onclick="send('A')">A</button>
-  <button onclick="send('B')">B</button>
+  <button id="btn-a" onclick="press('A','btn-a')">A</button>
+  <button id="btn-b" onclick="press('B','btn-b')">B</button>
 </div>
 
 <script>
@@ -70,6 +79,15 @@ async function connect() {
 
 document.getElementById('connect').onclick = connect;
 
+function press(command, id) {
+  const btn = document.getElementById(id);
+  if (btn) {
+    btn.classList.add('active');
+    setTimeout(() => btn.classList.remove('active'), 150);
+  }
+  send(command);
+}
+
 function send(command) {
   if (!characteristic) {
     alert("Not connected");
@@ -81,12 +99,12 @@ function send(command) {
 // Keyboard control
 window.addEventListener('keydown', (e) => {
   switch(e.key) {
-    case 'ArrowUp': send('UP'); break;
-    case 'ArrowDown': send('DOWN'); break;
-    case 'ArrowLeft': send('LEFT'); break;
-    case 'ArrowRight': send('RIGHT'); break;
-    case 'a': case 'A': send('A'); break;
-    case 'b': case 'B': send('B'); break;
+    case 'ArrowUp': press('UP','btn-up'); break;
+    case 'ArrowDown': press('DOWN','btn-down'); break;
+    case 'ArrowLeft': press('LEFT','btn-left'); break;
+    case 'ArrowRight': press('RIGHT','btn-right'); break;
+    case 'a': case 'A': press('A','btn-a'); break;
+    case 'b': case 'B': press('B','btn-b'); break;
   }
 });
 
