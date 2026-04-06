@@ -3,137 +3,183 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Micro:bit Web Gamepad</title>
+<title>Micro:bit Gamepad</title>
+
 <style>
-  body { font-family: sans-serif; text-align: center; padding: 20px; }
-  .button {
-    display: inline-block;
-    font-size: 2rem;
-    width: 100px;
-    height: 100px;
-    margin: 10px;
-    background-color: #ccc;
-    border-radius: 15px;
-    line-height: 100px;
-    user-select: none;
-    cursor: pointer;
-    transition: background-color 0.1s;
+  body {
+    font-family: Arial;
+    text-align: center;
+    background: #111;
+    color: white;
   }
-  .pressed { background-color: #4CAF50; color: white; }
+
+  h1 { margin-top: 10px; }
+
+  button {
+    font-size: 2rem;
+    width: 90px;
+    height: 90px;
+    margin: 8px;
+    border-radius: 15px;
+    border: none;
+    background: #333;
+    color: white;
+  }
+
+  .pressed {
+    background: lime !important;
+    color: black;
+  }
+
+  #connect {
+    width: 200px;
+    height: 50px;
+    font-size: 1rem;
+    background: orange;
+    color: black;
+  }
 </style>
 </head>
+
 <body>
-<h1>Micro:bit Web Gamepad</h1>
-<button id="connectBtn">Connect to micro:bit</button>
+
+<h1>Micro:bit Gamepad</h1>
+<button id="connect">Connect</button>
+
 <br><br>
+
 <div>
-  <div class="button" id="up">↑</div>
+  <button data-cmd="UP">↑</button>
 </div>
+
 <div>
-  <div class="button" id="left">←</div>
-  <div class="button" id="down">↓</div>
-  <div class="button" id="right">→</div>
+  <button data-cmd="LEFT">←</button>
+  <button data-cmd="DOWN">↓</button>
+  <button data-cmd="RIGHT">→</button>
 </div>
+
 <br>
+
 <div>
-  <div class="button" id="btnA">A</div>
-  <div class="button" id="btnB">B</div>
+  <button data-cmd="A">A</button>
+  <button data-cmd="B">B</button>
 </div>
 
 <script>
-let controlChar;
-let pressedButtons = {}; // Track which buttons are pressed
-let intervalId;
+let device, characteristic;
+let pressed = {};
+let interval;
 
-// Define mapping of button/key to micro:bit command
-const commands = {
-  up: 0x01,
-  down: 0x02,
-  left: 0x03,
-  right: 0x04,
-  btnA: 0x05,
-  btnB: 0x06
-};
+// UART UUID (micro:bit standard)
+const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
-// Key mapping for keyboard
+// Keyboard mapping
 const keyMap = {
-  ArrowUp: 'up',
-  ArrowDown: 'down',
-  ArrowLeft: 'left',
-  ArrowRight: 'right',
-  KeyA: 'btnA',
-  KeyB: 'btnB'
+  ArrowUp: "UP",
+  ArrowDown: "DOWN",
+  ArrowLeft: "LEFT",
+  ArrowRight: "RIGHT",
+  KeyA: "A",
+  KeyB: "B"
 };
 
-// Connect to micro:bit via Web Bluetooth
-async function connectMicrobit() {
+// CONNECT FUNCTION (WITH FILTER)
+async function connect() {
   try {
-    
-const device = await navigator.bluetooth.requestDevice({
-  acceptAllDevices: true,
-  optionalServices: ['e95d0753-251d-470a-a062-fa1922dfa9a8']
-});
-  
+    device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { namePrefix: "BBC micro:bit", services: [UART_SERVICE] },
+        { namePrefix: "micro:bit", services: [UART_SERVICE] }
+      ]
+    });
 
     const server = await device.gatt.connect();
-    const service = await server.getPrimaryService('e95d0753-251d-470a-a062-fa1922dfa9a8'); 
-    controlChar = await service.getCharacteristic('e95d93ee-251d-470a-a062-fa1922dfa9a8'); // example characteristic
+    const service = await server.getPrimaryService(UART_SERVICE);
+    characteristic = await service.getCharacteristic(UART_TX);
 
-    alert("Connected to micro:bit!");
+    alert("Connected to " + device.name);
   } catch (err) {
     console.error(err);
-    alert("Failed to connect.");
+    alert("Connection failed");
   }
 }
 
-document.getElementById('connectBtn').addEventListener('click', connectMicrobit);
+document.getElementById("connect").onclick = connect;
 
-// Function to start sending commands while pressed
-function startSending() {
-  if (intervalId) clearInterval(intervalId);
-  intervalId = setInterval(() => {
-    if (controlChar) {
-      for (const btn in pressedButtons) {
-        if (pressedButtons[btn]) {
-          controlChar.writeValue(new Uint8Array([commands[btn]]));
-        }
-      }
+// SEND DATA
+function send(cmd) {
+  if (!characteristic) return;
+  const encoder = new TextEncoder();
+  characteristic.writeValue(encoder.encode(cmd + "\n"));
+}
+
+// CONTINUOUS LOOP
+function startLoop() {
+  if (interval) clearInterval(interval);
+
+  interval = setInterval(() => {
+    for (let key in pressed) {
+      if (pressed[key]) send(key);
     }
-  }, 100); // send command every 100ms while pressed
+  }, 100);
 }
 
-// Button press/release handlers
-function pressButton(btn) {
-  pressedButtons[btn] = true;
-  document.getElementById(btn).classList.add('pressed');
-  startSending();
+// PRESS / RELEASE
+function press(btn, el) {
+  pressed[btn] = true;
+  el.classList.add("pressed");
+  startLoop();
 }
 
-function releaseButton(btn) {
-  pressedButtons[btn] = false;
-  document.getElementById(btn).classList.remove('pressed');
+function release(btn, el) {
+  pressed[btn] = false;
+  el.classList.remove("pressed");
 }
 
-// Mouse/touch events
-Object.keys(commands).forEach(btn => {
-  const el = document.getElementById(btn);
-  el.addEventListener('mousedown', () => pressButton(btn));
-  el.addEventListener('mouseup', () => releaseButton(btn));
-  el.addEventListener('mouseleave', () => releaseButton(btn));
-  el.addEventListener('touchstart', e => { e.preventDefault(); pressButton(btn); });
-  el.addEventListener('touchend', e => { e.preventDefault(); releaseButton(btn); });
+// BUTTON EVENTS
+document.querySelectorAll("button[data-cmd]").forEach(btn => {
+  const cmd = btn.dataset.cmd;
+
+  btn.onmousedown = () => press(cmd, btn);
+  btn.onmouseup = () => release(cmd, btn);
+  btn.onmouseleave = () => release(cmd, btn);
+
+  btn.ontouchstart = (e) => {
+    e.preventDefault();
+    press(cmd, btn);
+  };
+
+  btn.ontouchend = (e) => {
+    e.preventDefault();
+    release(cmd, btn);
+  };
 });
 
-// Keyboard events
-document.addEventListener('keydown', e => {
-  const btn = keyMap[e.code];
-  if (btn && !pressedButtons[btn]) pressButton(btn);
+// KEYBOARD EVENTS
+document.addEventListener("keydown", e => {
+  const cmd = keyMap[e.code];
+  if (cmd && !pressed[cmd]) {
+    pressed[cmd] = true;
+
+    // highlight button
+    const el = document.querySelector(`[data-cmd="${cmd}"]`);
+    if (el) el.classList.add("pressed");
+
+    startLoop();
+  }
 });
 
-document.addEventListener('keyup', e => {
-  const btn = keyMap[e.code];
-  if (btn) releaseButton(btn);
+document.addEventListener("keyup", e => {
+  const cmd = keyMap[e.code];
+  if (cmd) {
+    pressed[cmd] = false;
+
+    const el = document.querySelector(`[data-cmd="${cmd}"]`);
+    if (el) el.classList.remove("pressed");
+  }
 });
 </script>
+
 </body>
 </html>
