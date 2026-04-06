@@ -76,8 +76,20 @@ function send(command) {
     return;
   }
   const encoder = new TextEncoder();
-  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
+  characteristic.writeValue(encoder.encode(command + "\n"));
 }
+// Keyboard control
+window.addEventListener('keydown', (e) => {
+  switch(e.key) {
+    case 'ArrowUp': send('UP'); break;
+    case 'ArrowDown': send('DOWN'); break;
+    case 'ArrowLeft': send('LEFT'); break;
+    case 'ArrowRight': send('RIGHT'); break;
+    case 'a': case 'A': send('A'); break;
+    case 'b': case 'B': send('B'); break;
+  }
+});
+
 </script>
 
 </body>
