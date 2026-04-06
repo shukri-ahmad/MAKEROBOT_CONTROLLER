@@ -51,16 +51,23 @@ document.getElementById('connect').onclick = async () => {
 };
 
 // 2. The Send Function
+let isSending = false;
+
 async function sendData(cmd) {
-    if (!uart) return;
+    if (!uart || isSending) return;
+    
+    isSending = true;
     try {
         const encoder = new TextEncoder();
-        // Change \n to a space " " to match the new Microbit code
-        await uart.writeValueWithResponse(encoder.encode(cmd + " ")); 
-        console.log("Sent to Microbit:", cmd);
+        // Sending command + NewLine (\n)
+        await uart.writeValueWithResponse(encoder.encode(cmd + "\n"));
+        console.log("Sent:", cmd);
     } catch (e) {
         console.log("Send Error:", e);
     }
+    
+    // Small delay to prevent jamming the Bluetooth radio
+    setTimeout(() => { isSending = false; }, 50);
 }
     
 // 3. Attach Events to ALL buttons
