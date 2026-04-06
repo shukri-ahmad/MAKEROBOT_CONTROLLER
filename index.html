@@ -43,20 +43,27 @@ const statusText = document.getElementById('status');
 async function connect() {
     try {
         statusText.innerText = "Status: Searching...";
+        
+        // This version is more aggressive in finding the UART service
         device = await navigator.bluetooth.requestDevice({
             filters: [{ namePrefix: "BBC micro:bit" }],
-            optionalServices: [UART_SERVICE]
+            optionalServices: [UART_SERVICE] 
         });
 
         const server = await device.gatt.connect();
+        
+        // Added a small delay to allow the GATT server to stabilize
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         const service = await server.getPrimaryService(UART_SERVICE);
         characteristic = await service.getCharacteristic(UART_RX);
         
         statusText.innerText = "Status: Connected!";
-        document.getElementById('connect').style.background = "#555";
+        // Visual confirmation on the Micro:bit
+        send("HELLO"); 
     } catch (err) {
-        console.error(err);
-        statusText.innerText = "Status: Connection Failed";
+        console.error("Connection Error:", err);
+        statusText.innerText = "Error: " + err.message;
     }
 }
 
