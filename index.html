@@ -76,7 +76,7 @@ function send(command) {
     return;
   }
   const encoder = new TextEncoder();
-  characteristic.writeValue(encoder.encode(command + "\n"));
+  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
 }
 </script>
 
