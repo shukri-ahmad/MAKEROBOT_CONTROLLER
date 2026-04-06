@@ -1,170 +1,111 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Microbit Web Gamepad</title>
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    text-align: center;
-    background: #111;
-    color: white;
-  }
-  button {
-    width: 80px;
-    height: 80px;
-    margin: 10px;
-    font-size: 20px;
-    border-radius: 10px;
-    border: none;
-    background: #333;
-    color: white;
-    transition: transform 0.05s, background 0.1s;
-  }
-  button:active {
-    background: #ff4444;
-    transform: scale(0.95);
-  }
-  .active {
-    background: #ff4444 !important;
-    transform: scale(0.95);
-  }
-  .row {
-    display: flex;
-    justify-content: center;
-  }
-  #connect {
-    background: green;
-    width: 200px;
-  }
-</style>
+    <title>MAKEROBOT CONTROLLER - Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #222; color: white; }
+        .grid { display: grid; grid-template-columns: 100px 100px 100px; gap: 10px; justify-content: center; margin-top: 20px; }
+        button { 
+            padding: 20px; font-size: 18px; cursor: pointer; 
+            user-select: none; -webkit-user-select: none; 
+            background: #444; color: white; border: 2px solid #666; border-radius: 10px;
+        }
+        button:active { background: #00ff00; color: black; }
+        .connect-btn { background: #008cba; padding: 10px 30px; margin-bottom: 20px; }
+    </style>
 </head>
 <body>
 
-<h1>Microbit Gamepad</h1>
-<button id="connect">Connect</button>
+    <h1>Makerobot Controller</h1>
+    <button class="connect-btn" onclick="connectBT()">Connect Micro:bit</button>
+    <p id="status">Status: Disconnected</p>
 
-<div class="row">
-  <button id="btn-up" onclick="press('UP','btn-up')">↑</button>
-</div>
-<div class="row">
-  <button id="btn-left" onclick="press('LEFT','btn-left')">←</button>
-  <button id="btn-down" onclick="press('DOWN','btn-down')">↓</button>
-  <button id="btn-right" onclick="press('RIGHT','btn-right')">→</button>
-</div>
-<div class="row">
-  <button id="btn-a" onclick="press('A','btn-a')">A</button>
-  <button id="btn-b" onclick="press('B','btn-b')">B</button>
-</div>
+    <div class="grid">
+        <div></div>
+        <button id="btn-F">▲</button>
+        <div></div>
 
-<script>
-let device, characteristic;
+        <button id="btn-L">◀</button>
+        <button id="btn-S" style="background: #900;">■</button>
+        <button id="btn-R">▶</button>
 
-const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const UART_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+        <div></div>
+        <button id="btn-B">▼</button>
+        <div></div>
+    </div>
 
-async function connect() {
-  try {
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "BBC micro:bit" }],
-      optionalServices: [UART_SERVICE]
-    });
+    <script>
+        let device, characteristic;
+        let transmitInterval;
+        const SEND_RATE = 100; // ms
 
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(UART_SERVICE);
-    characteristic = await service.getCharacteristic(UART_RX);
+        // --- Bluetooth Logic ---
+        async function connectBT() {
+            const serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"; // UART Service
+            const txUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
-    alert("Connected!");
-  } catch (err) {
-    console.error(err);
-    alert("Connection failed");
-  }
-}
+            try {
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'BBC micro:bit' }],
+                    optionalServices: [serviceUuid]
+                });
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(serviceUuid);
+                characteristic = await service.getCharacteristic(txUuid);
+                document.getElementById('status').innerText = "Status: Connected!";
+            } catch (error) {
+                console.log(error);
+                alert("Connection failed. Ensure Bluetooth is on.");
+            }
+        }
 
-document.getElementById('connect').onclick = connect;
+        async function sendData(data) {
+            if (!characteristic) return;
+            const encoder = new TextEncoder();
+            await characteristic.writeValue(encoder.encode(data));
+        }
 
-function highlight(id) {
-  const btn = document.getElementById(id);
-  if (!btn) return;
-  btn.classList.add('active');
-  setTimeout(() => btn.classList.remove('active'), 150);
-}
+        // --- Press & Hold Logic ---
+        function startAction(cmd) {
+            if (transmitInterval) clearInterval(transmitInterval);
+            
+            sendData(cmd); // Initial send
+            transmitInterval = setInterval(() => {
+                sendData(cmd);
+            }, SEND_RATE);
+        }
 
-function send(command) {
-  console.log("SEND:", command);
-  if (!characteristic) return;
-  const encoder = new TextEncoder();
-  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
-}
+        function stopAction() {
+            clearInterval(transmitInterval);
+            transmitInterval = null;
+            sendData('S'); // Send 'S' for Stop
+        }
 
-// Attach events AFTER page loads
-window.onload = () => {
-  const map = {
-    'btn-up': 'UP',
-    'btn-down': 'DOWN',
-    'btn-left': 'LEFT',
-    'btn-right': 'RIGHT',
-    'btn-a': 'A',
-    'btn-b': 'B'
-  };
+        // --- Event Listener Mapping ---
+        function setupButton(id, command) {
+            const btn = document.getElementById(id);
+            
+            // Mouse Events
+            btn.addEventListener('mousedown', () => startAction(command));
+            btn.addEventListener('mouseup', stopAction);
+            btn.addEventListener('mouseleave', stopAction);
 
-  Object.keys(map).forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
+            // Touch Events
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                startAction(command);
+            });
+            btn.addEventListener('touchend', stopAction);
+        }
 
-    // Mouse
-    el.addEventListener('mousedown', () => {
-      highlight(id);
-      send(map[id]);
-    });
+        // Initialize buttons
+        setupButton('btn-F', 'F');
+        setupButton('btn-B', 'B');
+        setupButton('btn-L', 'L');
+        setupButton('btn-R', 'R');
+        setupButton('btn-S', 'S');
 
-    // Touch (mobile fix)
-    el.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      highlight(id);
-      send(map[id]);
-    });
-  });
-};
-
-// Keyboard
-window.addEventListener('keydown', (e) => {
-  switch(e.key) {
-    case 'ArrowUp': highlight('btn-up'); send('UP'); break;
-    case 'ArrowDown': highlight('btn-down'); send('DOWN'); break;
-    case 'ArrowLeft': highlight('btn-left'); send('LEFT'); break;
-    case 'ArrowRight': highlight('btn-right'); send('RIGHT'); break;
-    case 'a': case 'A': highlight('btn-a'); send('A'); break;
-    case 'b': case 'B': highlight('btn-b'); send('B'); break;
-  }
-});
-
-</script>
-
+    </script>
 </body>
 </html>
-
-<!-- ================= MICRO:BIT CODE (MakeCode JavaScript) =================
-
-bluetooth.startUartService();
-
-bluetooth.onUartDataReceived(serial.delimiters(Delimiters.NewLine), function () {
-    let msg = bluetooth.uartReadUntil(serial.delimiters(Delimiters.NewLine));
-
-    if (msg == "UP") {
-        basic.showArrow(ArrowNames.North);
-    } else if (msg == "DOWN") {
-        basic.showArrow(ArrowNames.South);
-    } else if (msg == "LEFT") {
-        basic.showArrow(ArrowNames.West);
-    } else if (msg == "RIGHT") {
-        basic.showArrow(ArrowNames.East);
-    } else if (msg == "A") {
-        basic.showString("A");
-    } else if (msg == "B") {
-        basic.showString("B");
-    }
-});
-
-========================================================================== -->
