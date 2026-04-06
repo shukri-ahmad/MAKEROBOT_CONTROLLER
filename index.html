@@ -59,6 +59,8 @@ let device, characteristic;
 const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const UART_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
+let activeIntervals = {}; // track holding buttons
+
 async function connect() {
   try {
     device = await navigator.bluetooth.requestDevice({
@@ -76,6 +78,104 @@ async function connect() {
     alert("Connection failed");
   }
 }
+document.getElementById('connect').onclick = connect;
+
+function highlight(id, state) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  if (state) btn.classList.add('active');
+  else btn.classList.remove('active');
+}
+
+function send(command) {
+  if (!characteristic) return;
+  const encoder = new TextEncoder();
+  characteristic.writeValueWithoutResponse(encoder.encode(command + "\n"));
+}
+
+// START HOLD
+function startPress(command, id) {
+  if (activeIntervals[id]) return; // already running
+
+  highlight(id, true);
+
+  activeIntervals[id] = setInterval(() => {
+    send(command);
+  }, 100); // send every 100ms (adjust speed here)
+}
+
+// STOP HOLD
+function stopPress(id) {
+  highlight(id, false);
+
+  if (activeIntervals[id]) {
+    clearInterval(activeIntervals[id]);
+    delete activeIntervals[id];
+  }
+}
+
+window.onload = () => {
+  const map = {
+    'btn-up': 'UP',
+    'btn-down': 'DOWN',
+    'btn-left': 'LEFT',
+    'btn-right': 'RIGHT',
+    'btn-a': 'A',
+    'btn-b': 'B'
+  };
+
+  Object.keys(map).forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    // Mouse
+    el.addEventListener('mousedown', () => startPress(map[id], id));
+    el.addEventListener('mouseup', () => stopPress(id));
+    el.addEventListener('mouseleave', () => stopPress(id));
+
+    // Touch
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      startPress(map[id], id);
+    });
+    el.addEventListener('touchend', () => stopPress(id));
+    el.addEventListener('touchcancel', () => stopPress(id));
+  });
+};
+
+// Keyboard HOLD support
+let activeKeys = {};
+
+window.addEventListener('keydown', (e) => {
+  if (activeKeys[e.key]) return; // prevent repeat
+
+  activeKeys[e.key] = true;
+
+  switch(e.key) {
+    case 'ArrowUp': startPress('UP','btn-up'); break;
+    case 'ArrowDown': startPress('DOWN','btn-down'); break;
+    case 'ArrowLeft': startPress('LEFT','btn-left'); break;
+    case 'ArrowRight': startPress('RIGHT','btn-right'); break;
+    case 'a': case 'A': startPress('A','btn-a'); break;
+    case 'b': case 'B': startPress('B','btn-b'); break;
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  activeKeys[e.key] = false;
+
+  switch(e.key) {
+    case 'ArrowUp': stopPress('btn-up'); break;
+    case 'ArrowDown': stopPress('btn-down'); break;
+    case 'ArrowLeft': stopPress('btn-left'); break;
+    case 'ArrowRight': stopPress('btn-right'); break;
+    case 'a': case 'A': stopPress('btn-a'); break;
+    case 'b': case 'B': stopPress('btn-b'); break;
+  }
+});
+</script>
+
+  
 document.getElementById('connect').onclick = connect;
 
 function highlight(id) {
